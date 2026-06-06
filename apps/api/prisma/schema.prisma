@@ -1,0 +1,611 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  TENANT_ADMIN
+  RESTAURANT_MANAGER
+  OUTLET_MANAGER
+  STAFF
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OutletStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum CategoryStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum MenuItemStatus {
+  DRAFT
+  ACTIVE
+  OUT_OF_STOCK
+  ARCHIVED
+}
+
+enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum CustomerStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum OrderSource {
+  POS
+  STORE_FRONT
+  SWIGGY
+  ZOMATO
+  UBER_EATS
+  PHONE
+  WALK_IN
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  WALLET
+  NET_BANKING
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  WHATSAPP
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  REFRESH
+  PUBLISH
+  CANCEL
+  REFUND
+}
+
+model Tenant {
+  id               String          @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String          @unique
+  status           TenantStatus    @default(ACTIVE)
+  primaryEmail     String
+  primaryPhone     String?
+  timezone         String          @default("UTC")
+  currencyCode     String          @db.VarChar(3)
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  users            User[]
+  subscriptions    Subscription[]
+  restaurants      Restaurant[]
+  outlets          Outlet[]
+  categories       Category[]
+  menuItems        MenuItem[]
+  variants         Variant[]
+  addons           Addon[]
+  inventories      Inventory[]
+  customers        Customer[]
+  orders           Order[]
+  orderItems       OrderItem[]
+  payments         Payment[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("tenants")
+}
+
+model User {
+  id               String          @id @default(uuid()) @db.Uuid
+  tenantId         String          @db.Uuid
+  restaurantId     String?         @db.Uuid
+  outletId         String?         @db.Uuid
+  firstName        String
+  lastName         String?
+  email            String
+  phone            String?
+  passwordHash     String
+  role             UserRole
+  status           UserStatus      @default(INVITED)
+  lastLoginAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  restaurant       Restaurant?     @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  outlet           Outlet?         @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
+  createdOrders    Order[]         @relation("OrderCreatedBy")
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+  @@index([tenantId, outletId])
+  @@index([tenantId, deletedAt])
+  @@map("users")
+}
+
+model Subscription {
+  id               String             @id @default(uuid()) @db.Uuid
+  tenantId         String             @db.Uuid
+  plan             SubscriptionPlan
+  status           SubscriptionStatus @default(TRIALING)
+  startsAt         DateTime
+  endsAt           DateTime?
+  trialEndsAt      DateTime?
+  seats            Int                @default(1)
+  priceMinor       Int
+  currencyCode     String             @db.VarChar(3)
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([tenantId, plan])
+  @@index([deletedAt])
+  @@map("subscriptions")
+}
+
+model Restaurant {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @db.Uuid
+  name             String
+  slug             String
+  description      String?
+  cuisineType      String?
+  status           RestaurantStatus @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  users            User[]
+  outlets          Outlet[]
+  categories       Category[]
+  menuItems        MenuItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+  @@map("restaurants")
+}
+
+model Outlet {
+  id               String        @id @default(uuid()) @db.Uuid
+  tenantId         String        @db.Uuid
+  restaurantId     String        @db.Uuid
+  name             String
+  code             String
+  phone            String?
+  email            String?
+  addressLine1     String?
+  addressLine2     String?
+  city             String?
+  state            String?
+  country          String?
+  postalCode       String?
+  timezone         String        @default("UTC")
+  status           OutletStatus  @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  restaurant       Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  users            User[]
+  inventories      Inventory[]
+  orders           Order[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, restaurantId])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+  @@map("outlets")
+}
+
+model Category {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  restaurantId     String         @db.Uuid
+  name             String
+  slug             String
+  description      String?
+  sortOrder        Int            @default(0)
+  status           CategoryStatus @default(DRAFT)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  restaurant       Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  menuItems        MenuItem[]
+
+  @@unique([tenantId, restaurantId, slug])
+  @@index([tenantId, restaurantId, status])
+  @@index([tenantId, deletedAt])
+  @@map("categories")
+}
+
+model MenuItem {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  restaurantId     String         @db.Uuid
+  categoryId       String         @db.Uuid
+  name             String
+  slug             String
+  description      String?
+  sku              String?
+  basePriceMinor   Int
+  currencyCode     String         @db.VarChar(3)
+  imageUrl         String?
+  isVegetarian     Boolean        @default(false)
+  isFeatured       Boolean        @default(false)
+  status           MenuItemStatus @default(DRAFT)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  restaurant       Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  category         Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants         Variant[]
+  addons           Addon[]
+  inventories      Inventory[]
+  orderItems       OrderItem[]
+
+  @@unique([tenantId, restaurantId, slug])
+  @@unique([tenantId, sku])
+  @@index([tenantId, categoryId, status])
+  @@index([tenantId, isFeatured])
+  @@index([tenantId, deletedAt])
+  @@map("menu_items")
+}
+
+model Variant {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  menuItemId       String         @db.Uuid
+  name             String
+  sku              String?
+  priceMinor       Int
+  currencyCode     String         @db.VarChar(3)
+  sortOrder        Int            @default(0)
+  isDefault        Boolean        @default(false)
+  status           MenuItemStatus @default(ACTIVE)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  menuItem         MenuItem       @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  inventories      Inventory[]
+  orderItems       OrderItem[]
+
+  @@unique([tenantId, menuItemId, name])
+  @@unique([tenantId, sku])
+  @@index([tenantId, menuItemId, status])
+  @@index([tenantId, deletedAt])
+  @@map("variants")
+}
+
+model Addon {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  menuItemId       String         @db.Uuid
+  name             String
+  priceMinor       Int
+  currencyCode     String         @db.VarChar(3)
+  maxQuantity      Int            @default(1)
+  sortOrder        Int            @default(0)
+  status           MenuItemStatus @default(ACTIVE)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  menuItem         MenuItem       @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, menuItemId, name])
+  @@index([tenantId, menuItemId, status])
+  @@index([tenantId, deletedAt])
+  @@map("addons")
+}
+
+model Inventory {
+  id               String          @id @default(uuid()) @db.Uuid
+  tenantId         String          @db.Uuid
+  outletId         String          @db.Uuid
+  menuItemId       String          @db.Uuid
+  variantId        String?         @db.Uuid
+  quantity         Decimal         @db.Decimal(12, 3)
+  reservedQuantity Decimal         @default(0) @db.Decimal(12, 3)
+  unit             String
+  reorderLevel     Decimal?        @db.Decimal(12, 3)
+  status           InventoryStatus @default(IN_STOCK)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet           Outlet          @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  menuItem         MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  variant          Variant?        @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, outletId, menuItemId, variantId])
+  @@index([tenantId, outletId, status])
+  @@index([tenantId, menuItemId])
+  @@index([tenantId, deletedAt])
+  @@map("inventories")
+}
+
+model Customer {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @db.Uuid
+  firstName        String
+  lastName         String?
+  email            String?
+  phone            String?
+  status           CustomerStatus @default(ACTIVE)
+  lastOrderedAt    DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  orders           Order[]
+  notifications    Notification[]
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, phone])
+  @@index([tenantId, status])
+  @@index([tenantId, lastOrderedAt])
+  @@index([tenantId, deletedAt])
+  @@map("customers")
+}
+
+model Order {
+  id               String       @id @default(uuid()) @db.Uuid
+  tenantId         String       @db.Uuid
+  outletId         String       @db.Uuid
+  customerId       String?      @db.Uuid
+  createdByUserId  String?      @db.Uuid
+  orderNumber      String
+  source           OrderSource
+  status           OrderStatus  @default(PENDING)
+  subtotalMinor    Int
+  taxMinor         Int          @default(0)
+  discountMinor    Int          @default(0)
+  totalMinor       Int
+  currencyCode     String       @db.VarChar(3)
+  notes            String?
+  placedAt         DateTime     @default(now())
+  completedAt      DateTime?
+  canceledAt       DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  outlet           Outlet       @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdByUser    User?        @relation("OrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  orderItems       OrderItem[]
+  payments         Payment[]
+  notifications    Notification[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, outletId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, placedAt])
+  @@index([tenantId, source])
+  @@index([tenantId, deletedAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String     @db.Uuid
+  orderId          String     @db.Uuid
+  menuItemId       String     @db.Uuid
+  variantId        String?    @db.Uuid
+  quantity         Int
+  unitPriceMinor   Int
+  totalPriceMinor  Int
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order            Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem         MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  variant          Variant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, menuItemId])
+  @@index([tenantId, deletedAt])
+  @@map("order_items")
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  tenantId         String        @db.Uuid
+  orderId          String        @db.Uuid
+  providerRef      String?
+  method           PaymentMethod
+  status           PaymentStatus @default(PENDING)
+  amountMinor      Int
+  currencyCode     String        @db.VarChar(3)
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, providerRef])
+  @@index([tenantId, orderId, status])
+  @@index([tenantId, method])
+  @@index([tenantId, deletedAt])
+  @@map("payments")
+}
+
+model Notification {
+  id               String              @id @default(uuid()) @db.Uuid
+  tenantId         String              @db.Uuid
+  userId           String?             @db.Uuid
+  customerId       String?             @db.Uuid
+  orderId          String?             @db.Uuid
+  channel          NotificationChannel
+  status           NotificationStatus  @default(PENDING)
+  subject          String?
+  body             String
+  sentAt           DateTime?
+  readAt           DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user             User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  order            Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status, channel])
+  @@index([tenantId, userId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, deletedAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id               String       @id @default(uuid()) @db.Uuid
+  tenantId         String       @db.Uuid
+  userId           String?      @db.Uuid
+  entityType       String
+  entityId         String       @db.Uuid
+  action           AuditAction
+  ipAddress        String?
+  userAgent        String?
+  metadata         Json?
+  createdAt        DateTime     @default(now())
+  deletedAt        DateTime?
+
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user             User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, action])
+  @@index([tenantId, deletedAt])
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id               String      @id @default(uuid()) @db.Uuid
+  tenantId         String      @db.Uuid
+  userId           String      @db.Uuid
+  tokenHash        String      @unique
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  deletedAt        DateTime?
+
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([tenantId, expiresAt])
+  @@index([tenantId, revokedAt])
+  @@index([tenantId, deletedAt])
+  @@map("refresh_tokens")
+}
