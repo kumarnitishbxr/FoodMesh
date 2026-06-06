@@ -30,9 +30,8 @@ enum SubscriptionStatus {
 }
 
 enum UserRole {
-  PLATFORM_ADMIN
-  TENANT_ADMIN
-  RESTAURANT_MANAGER
+  SUPER_ADMIN
+  RESTAURANT_OWNER
   OUTLET_MANAGER
   STAFF
 }
@@ -189,6 +188,12 @@ model User {
   passwordHash     String
   role             UserRole
   status           UserStatus      @default(INVITED)
+  isEmailVerified  Boolean         @default(false)
+  emailVerifiedAt  DateTime?
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
+  emailVerificationTokenHash String?
+  emailVerificationExpiresAt DateTime?
   lastLoginAt      DateTime?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
@@ -203,6 +208,8 @@ model User {
   createdOrders    Order[]         @relation("OrderCreatedBy")
 
   @@unique([tenantId, email])
+  @@unique([passwordResetTokenHash])
+  @@unique([emailVerificationTokenHash])
   @@index([tenantId, role])
   @@index([tenantId, outletId])
   @@index([tenantId, deletedAt])

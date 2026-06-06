@@ -110,8 +110,10 @@ async function main() {
       email: 'admin@foodmesh-demo.com',
       phone: '+919888888888',
       passwordHash: 'replace-with-bcrypt-hash',
-      role: 'TENANT_ADMIN',
+      role: 'RESTAURANT_OWNER',
       status: 'ACTIVE',
+      isEmailVerified: true,
+      emailVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
     },
   });
 
